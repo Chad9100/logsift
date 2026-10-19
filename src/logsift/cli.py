@@ -38,6 +38,9 @@ def build_parser() -> argparse.ArgumentParser:
                         help="output format (default: text)")
     parser.add_argument("-n", "--top", type=int, default=10, metavar="N",
                         help="rows to show in each ranking (default: 10)")
+    parser.add_argument("-b", "--bucket", choices=["auto", "minute", "hour", "day"],
+                        default="auto",
+                        help="time step for the requests-over-time chart (default: auto)")
     parser.add_argument("--status", metavar="CODES",
                         help="only count these status codes or classes, e.g. 404,5xx")
     parser.add_argument("--since", type=_parse_time, metavar="TIME",
@@ -89,7 +92,7 @@ def main(argv: list[str] | None = None) -> int:
 
     summary = summarize(entries, skipped_lines=result.skipped)
     render = to_json if args.format == "json" else to_text
-    sys.stdout.write(render(summary, top=args.top))
+    sys.stdout.write(render(summary, top=args.top, bucket=args.bucket))
     return 0
 
 

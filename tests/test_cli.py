@@ -34,6 +34,18 @@ def test_time_window(capsys):
     assert data["total_requests"] == 5
 
 
+def test_json_timeline_of_sample(capsys):
+    data = run_json(capsys)
+    assert data["timeline_bucket"] == "hour"
+    assert [row["count"] for row in data["timeline"]] == [4, 3, 2, 2, 1, 1]
+    assert data["timeline"][0]["start"] == "2026-10-19T08:00:00+00:00"
+
+
+def test_bucket_option(capsys):
+    data = run_json(capsys, "--bucket", "day")
+    assert data["timeline"] == [{"start": "2026-10-19T00:00:00+00:00", "count": 13}]
+
+
 def test_top_limits_rankings(capsys):
     data = run_json(capsys, "--top", "1")
     assert len(data["top_ips"]) == 1

@@ -29,7 +29,27 @@ def _table(title: str, counter: Counter, top: int, total: int) -> list[str]:
     return lines + [""]
 
 
-def to_text(summary: Summary, top: int = 10) -> str:
+TIME_LABELS = {"minute": "%Y-%m-%d %H:%M", "hour": "%Y-%m-%d %H:00", "day": "%Y-%m-%d"}
+BAR_WIDTH = 40
+
+
+def _timeline_chart(summary: Summary, bucket: str) -> list[str]:
+    rows = summary.timeline(bucket)
+    if not rows:
+        return []
+    name = summary.resolve_bucket(bucket)
+    peak = max(count for _, count in rows)
+    width = len(str(peak))
+    lines = [f"Requests over time (per {name})"]
+    for start, count in rows:
+        bar = "#" * round(BAR_WIDTH * count / peak) if peak else ""
+        if count and not bar:
+            bar = "."  # visible marker for small non-zero counts
+        lines.append(f"  {start.strftime(TIME_LABELS[name])}  {count:>{width}}  {bar}")
+    return lines + [""]
+
+
+def to_text(summary: Summary, top: int = 10, bucket: str = "auto") -> str:
     total = summary.total_requests
     lines = [
         f"Requests:      {total}",
@@ -49,6 +69,7 @@ def to_text(summary: Summary, top: int = 10) -> str:
         lines.extend(f"  {name}: {count}" for name, count in classes.items())
         lines.append("")
 
+    lines += _timeline_chart(summary, bucket)
     lines += _table("Top paths", summary.paths, top, total)
     lines += _table("Top IPs", summary.ips, top, total)
     lines += _table("Status codes", summary.statuses, top, total)
@@ -57,7 +78,7 @@ def to_text(summary: Summary, top: int = 10) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def to_dict(summary: Summary, top: int = 10) -> dict:
+def to_dict(summary: Summary, top: int = 10, bucket: str = "auto") -> dict:
     def ranked(counter: Counter) -> list[dict]:
         return [{"value": k, "count": c} for k, c in counter.most_common(top)]
 
@@ -75,8 +96,13 @@ def to_dict(summary: Summary, top: int = 10) -> dict:
         "status_codes": ranked(summary.statuses),
         "error_paths": ranked(summary.error_paths),
         "top_agents": ranked(summary.agents),
+        "timeline_bucket": summary.resolve_bucket(bucket),
+        "timeline": [
+            {"start": start.isoformat(), "count": count}
+            for start, count in summary.timeline(bucket)
+        ],
     }
 
 
-def to_json(summary: Summary, top: int = 10) -> str:
-    return json.dumps(to_dict(summary, top), indent=2) + "\n"
+def to_json(summary: Summary, top: int = 10, bucket: str = "auto") -> str:
+    return json.dumps(to_dict(summary, top, bucket), indent=2) + "\n"

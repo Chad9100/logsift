@@ -10,7 +10,7 @@
 
 ## v0.2 — better reports
 
-- [ ] Requests-over-time histogram (per minute / hour / day) in the terminal
+- [x] Requests-over-time histogram (per minute / hour / day) in the terminal
 - [ ] Group paths: strip query strings, optionally collapse IDs (`/items/123` → `/items/:id`)
 - [ ] Bot / crawler detection from user agents, with `--exclude-bots`
 - [ ] Bandwidth by path and by IP

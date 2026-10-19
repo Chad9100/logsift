@@ -16,6 +16,7 @@ Built with Python 3.10+ (standard library only), tested with pytest.
 - Parses **Common** and **Combined** Log Format (Apache and Nginx defaults)
 - Reads plain files, **`.gz`** rotated logs, several files at once, or **stdin**
 - Text report or **JSON** output for scripting
+- **Requests-over-time** bar chart, per minute / hour / day (`--bucket`, picked automatically by default)
 - Filters: `--status 404,5xx`, `--since` / `--until` time windows, `--top N`
 - Counts and reports lines it couldn't parse instead of crashing
 
@@ -35,6 +36,7 @@ pip install -e .
 logsift examples/sample_access.log
 logsift /var/log/nginx/access.log /var/log/nginx/access.log.1.gz --top 5
 logsift access.log --status 5xx --since 2026-10-19T09:00
+logsift access.log --bucket day         # one chart row per day
 cat access.log | logsift --format json
 python -m logsift access.log            # same thing without the script
 ```
@@ -52,6 +54,14 @@ Status classes
   3xx: 1
   4xx: 5
   5xx: 1
+
+Requests over time (per hour)
+  2026-10-19 08:00  4  ########################################
+  2026-10-19 09:00  3  ##############################
+  2026-10-19 10:00  2  ####################
+  2026-10-19 11:00  2  ####################
+  2026-10-19 12:00  1  ##########
+  2026-10-19 13:00  1  ##########
 
 Top IPs
   4   30.8%  203.0.113.25
