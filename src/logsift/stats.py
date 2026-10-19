@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Iterable
 
+from .bots import is_bot
 from .parser import LogEntry
 
 BUCKETS = {
@@ -39,6 +40,8 @@ class Summary:
     methods: Counter[str] = field(default_factory=Counter)
     agents: Counter[str] = field(default_factory=Counter)
     error_paths: Counter[str] = field(default_factory=Counter)
+    bot_requests: int = 0
+    bot_agents: Counter[str] = field(default_factory=Counter)
     # Requests per minute; coarser timelines are rolled up from this.
     minutes: Counter[datetime] = field(default_factory=Counter)
 
@@ -57,6 +60,9 @@ class Summary:
             return 0.0
         errors = sum(c for s, c in self.statuses.items() if s >= 400)
         return errors / self.total_requests
+
+    def bot_rate(self) -> float:
+        return self.bot_requests / self.total_requests if self.total_requests else 0.0
 
     def resolve_bucket(self, bucket: str = "auto") -> str:
         if bucket != "auto":
@@ -110,4 +116,7 @@ def summarize(entries: Iterable[LogEntry], skipped_lines: int = 0) -> Summary:
             summary.methods[entry.method] += 1
         if entry.agent:
             summary.agents[entry.agent] += 1
+        if is_bot(entry.agent):
+            summary.bot_requests += 1
+            summary.bot_agents[entry.agent or "(no user agent)"] += 1
     return summary

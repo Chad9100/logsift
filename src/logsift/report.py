@@ -56,6 +56,7 @@ def to_text(summary: Summary, top: int = 10, bucket: str = "auto") -> str:
         f"Unique IPs:    {summary.unique_ips}",
         f"Data sent:     {human_bytes(summary.total_bytes)}",
         f"Error rate:    {summary.error_rate() * 100:.1f}%",
+        f"Bot traffic:   {summary.bot_requests} ({summary.bot_rate() * 100:.1f}%)",
     ]
     if summary.first_seen and summary.last_seen:
         lines.append(f"Time range:    {summary.first_seen} -> {summary.last_seen}")
@@ -75,6 +76,7 @@ def to_text(summary: Summary, top: int = 10, bucket: str = "auto") -> str:
     lines += _table("Status codes", summary.statuses, top, total)
     lines += _table("Paths with errors (4xx/5xx)", summary.error_paths, top, total)
     lines += _table("Top user agents", summary.agents, top, total)
+    lines += _table("Top bots", summary.bot_agents, top, total)
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -96,6 +98,9 @@ def to_dict(summary: Summary, top: int = 10, bucket: str = "auto") -> dict:
         "status_codes": ranked(summary.statuses),
         "error_paths": ranked(summary.error_paths),
         "top_agents": ranked(summary.agents),
+        "bot_requests": summary.bot_requests,
+        "bot_rate": round(summary.bot_rate(), 4),
+        "top_bots": ranked(summary.bot_agents),
         "timeline_bucket": summary.resolve_bucket(bucket),
         "timeline": [
             {"start": start.isoformat(), "count": count}

@@ -46,6 +46,29 @@ def test_bucket_option(capsys):
     assert data["timeline"] == [{"start": "2026-10-19T00:00:00+00:00", "count": 13}]
 
 
+def test_bot_counts_in_sample(capsys):
+    # 2x ExampleBot, 3x curl, 1x missing user agent.
+    data = run_json(capsys)
+    assert data["bot_requests"] == 6
+    assert data["bot_rate"] == round(6 / 13, 4)
+    assert data["top_bots"][0] == {"value": "curl/8.5.0", "count": 3}
+    assert {"value": "(no user agent)", "count": 1} in data["top_bots"]
+
+
+def test_exclude_and_only_bots(capsys):
+    humans = run_json(capsys, "--exclude-bots")
+    assert humans["total_requests"] == 7
+    assert humans["bot_requests"] == 0
+    bots = run_json(capsys, "--only-bots")
+    assert bots["total_requests"] == 6
+    assert bots["bot_requests"] == 6
+
+
+def test_bot_flags_are_mutually_exclusive(capsys):
+    with pytest.raises(SystemExit):
+        main([SAMPLE, "--exclude-bots", "--only-bots"])
+
+
 def test_top_limits_rankings(capsys):
     data = run_json(capsys, "--top", "1")
     assert len(data["top_ips"]) == 1

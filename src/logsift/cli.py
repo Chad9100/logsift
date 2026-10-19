@@ -7,6 +7,7 @@ import sys
 from datetime import datetime, timezone
 
 from . import __version__
+from .bots import is_bot
 from .parser import iter_files, parse_lines
 from .report import to_json, to_text
 from .stats import summarize
@@ -47,6 +48,11 @@ def build_parser() -> argparse.ArgumentParser:
                         help="only count requests at or after TIME (ISO 8601)")
     parser.add_argument("--until", type=_parse_time, metavar="TIME",
                         help="only count requests before TIME (ISO 8601)")
+    bots = parser.add_mutually_exclusive_group()
+    bots.add_argument("--exclude-bots", action="store_true",
+                      help="ignore bots, crawlers and scripts (curl, python-requests, ...)")
+    bots.add_argument("--only-bots", action="store_true",
+                      help="only count bots, crawlers and scripts")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return parser
 
@@ -89,6 +95,10 @@ def main(argv: list[str] | None = None) -> int:
         entries = [e for e in entries if e.time >= args.since]
     if args.until:
         entries = [e for e in entries if e.time < args.until]
+    if args.exclude_bots:
+        entries = [e for e in entries if not is_bot(e.agent)]
+    if args.only_bots:
+        entries = [e for e in entries if is_bot(e.agent)]
 
     summary = summarize(entries, skipped_lines=result.skipped)
     render = to_json if args.format == "json" else to_text
