@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 from collections import Counter
 
@@ -159,3 +161,42 @@ def to_dict(summary: Summary, top: int = 10, bucket: str = "auto") -> dict:
 
 def to_json(summary: Summary, top: int = 10, bucket: str = "auto") -> str:
     return json.dumps(to_dict(summary, top, bucket), indent=2) + "\n"
+
+
+# (section name in the CSV, key in to_dict(), the key each row uses for its amount)
+_CSV_SECTIONS = [
+    ("top_paths", "top_paths", "count"),
+    ("top_ips", "top_ips", "count"),
+    ("bandwidth_by_path", "bandwidth_by_path", "bytes"),
+    ("bandwidth_by_ip", "bandwidth_by_ip", "bytes"),
+    ("status_codes", "status_codes", "count"),
+    ("error_paths", "error_paths", "count"),
+    ("top_agents", "top_agents", "count"),
+    ("top_bots", "top_bots", "count"),
+]
+
+
+def to_csv(summary: Summary, top: int = 10, bucket: str = "auto") -> str:
+    """One CSV with every report table, tagged by a "section" column.
+
+    Open it in a spreadsheet and filter or pivot on "section". Byte counts are
+    exact, not human-readable, so they stay usable in a spreadsheet formula.
+    """
+    data = to_dict(summary, top, bucket)
+    out = io.StringIO(newline="")
+    writer = csv.writer(out)
+    writer.writerow(["section", "value", "requests", "bytes", "percent"])
+
+    for section, key, unit in _CSV_SECTIONS:
+        total = data["total_bytes"] if unit == "bytes" else data["total_requests"]
+        for row in data[key]:
+            amount = row[unit]
+            pct = round(100 * amount / total, 2) if total else 0
+            requests = amount if unit == "count" else ""
+            size = amount if unit == "bytes" else ""
+            writer.writerow([section, row["value"], requests, size, pct])
+
+    for row in data["timeline"]:
+        writer.writerow(["timeline", row["start"], row["count"], "", ""])
+
+    return out.getvalue()

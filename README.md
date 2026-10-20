@@ -15,7 +15,7 @@ Built with Python 3.10+ (standard library only), tested with pytest.
 
 - Parses **Common** and **Combined** Log Format (Apache and Nginx defaults)
 - Reads plain files, **`.gz`** rotated logs, several files at once, or **stdin**
-- Text report or **JSON** output for scripting
+- Text report, **JSON** for scripting, or **CSV** for spreadsheets (`--format csv`)
 - **Colored output** in a terminal (errors in red, status classes by color); automatically
   off when piped, when `NO_COLOR` is set, or with `--color never`
 - **Requests-over-time** bar chart, per minute / hour / day (`--bucket`, picked automatically by default)
@@ -48,6 +48,7 @@ logsift access.log --bucket day         # one chart row per day
 logsift access.log --exclude-bots       # human visitors only
 logsift access.log --group-ids          # /items/123 and /items/456 -> /items/:id
 logsift access.log --color always | less -R   # keep colors when paging
+logsift access.log --format csv > report.csv  # open in a spreadsheet
 cat access.log | logsift --format json
 python -m logsift access.log            # same thing without the script
 ```
@@ -79,6 +80,10 @@ Top IPs
   4   30.8%  203.0.113.25
   3   23.1%  192.0.2.10
 ```
+
+`--format csv` writes every table (top paths, IPs, bandwidth, status codes, error
+paths, user agents, bots, and the timeline) into one CSV, tagged by a `section`
+column, so you can filter or pivot on it in a spreadsheet.
 
 Run `logsift --help` for all options.
 
