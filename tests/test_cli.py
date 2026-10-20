@@ -69,6 +69,23 @@ def test_bot_flags_are_mutually_exclusive(capsys):
         main([SAMPLE, "--exclude-bots", "--only-bots"])
 
 
+def test_path_grouping_flags(tmp_path, capsys):
+    log = tmp_path / "access.log"
+    log.write_text(
+        '192.0.2.1 - - [19/Oct/2026:08:00:00 +0000] "GET /items/1?x=1 HTTP/1.1" 200 5\n'
+        '192.0.2.1 - - [19/Oct/2026:08:00:01 +0000] "GET /items/2?x=2 HTTP/1.1" 200 5\n',
+        encoding="utf-8",
+    )
+
+    def top_paths(*args):
+        assert main([str(log), "--format", "json", *args]) == 0
+        return json.loads(capsys.readouterr().out)["top_paths"]
+
+    assert top_paths() == [{"value": "/items/1", "count": 1}, {"value": "/items/2", "count": 1}]
+    assert top_paths("--group-ids") == [{"value": "/items/:id", "count": 2}]
+    assert top_paths("--keep-query")[0]["value"] == "/items/1?x=1"
+
+
 def test_top_limits_rankings(capsys):
     data = run_json(capsys, "--top", "1")
     assert len(data["top_ips"]) == 1

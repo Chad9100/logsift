@@ -19,6 +19,9 @@ Built with Python 3.10+ (standard library only), tested with pytest.
 - **Requests-over-time** bar chart, per minute / hour / day (`--bucket`, picked automatically by default)
 - **Bot detection**: shows how much traffic comes from crawlers, monitors and scripts
   (Googlebot, AhrefsBot, curl, python-requests, ...); `--exclude-bots` / `--only-bots`
+- **Path grouping**: query strings are stripped so `/search?q=a` and `/search?q=b` count
+  as one page (`--keep-query` to keep them); `--group-ids` merges IDs, so `/items/123`
+  and `/items/456` become `/items/:id`
 - Filters: `--status 404,5xx`, `--since` / `--until` time windows, `--top N`
 - Counts and reports lines it couldn't parse instead of crashing
 
@@ -40,6 +43,7 @@ logsift /var/log/nginx/access.log /var/log/nginx/access.log.1.gz --top 5
 logsift access.log --status 5xx --since 2026-10-19T09:00
 logsift access.log --bucket day         # one chart row per day
 logsift access.log --exclude-bots       # human visitors only
+logsift access.log --group-ids          # /items/123 and /items/456 -> /items/:id
 cat access.log | logsift --format json
 python -m logsift access.log            # same thing without the script
 ```

@@ -48,6 +48,12 @@ def build_parser() -> argparse.ArgumentParser:
                         help="only count requests at or after TIME (ISO 8601)")
     parser.add_argument("--until", type=_parse_time, metavar="TIME",
                         help="only count requests before TIME (ISO 8601)")
+    parser.add_argument("--keep-query", action="store_true",
+                        help="count /search?q=a and /search?q=b separately "
+                             "(query strings are stripped by default)")
+    parser.add_argument("--group-ids", action="store_true",
+                        help="merge numeric, UUID and long hex path segments "
+                             "(/items/123 -> /items/:id)")
     bots = parser.add_mutually_exclusive_group()
     bots.add_argument("--exclude-bots", action="store_true",
                       help="ignore bots, crawlers and scripts (curl, python-requests, ...)")
@@ -100,7 +106,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.only_bots:
         entries = [e for e in entries if is_bot(e.agent)]
 
-    summary = summarize(entries, skipped_lines=result.skipped)
+    summary = summarize(
+        entries,
+        skipped_lines=result.skipped,
+        strip_query=not args.keep_query,
+        group_ids=args.group_ids,
+    )
     render = to_json if args.format == "json" else to_text
     sys.stdout.write(render(summary, top=args.top, bucket=args.bucket))
     return 0

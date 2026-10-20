@@ -9,6 +9,7 @@ from typing import Iterable
 
 from .bots import is_bot
 from .parser import LogEntry
+from .paths import normalize_path
 
 BUCKETS = {
     "minute": timedelta(minutes=1),
@@ -96,7 +97,12 @@ class Summary:
         return rows
 
 
-def summarize(entries: Iterable[LogEntry], skipped_lines: int = 0) -> Summary:
+def summarize(
+    entries: Iterable[LogEntry],
+    skipped_lines: int = 0,
+    strip_query: bool = True,
+    group_ids: bool = False,
+) -> Summary:
     summary = Summary(skipped_lines=skipped_lines)
     for entry in entries:
         summary.total_requests += 1
@@ -109,9 +115,10 @@ def summarize(entries: Iterable[LogEntry], skipped_lines: int = 0) -> Summary:
         summary.ips[entry.ip] += 1
         summary.statuses[entry.status] += 1
         if entry.path:
-            summary.paths[entry.path] += 1
+            path = normalize_path(entry.path, strip_query, group_ids)
+            summary.paths[path] += 1
             if entry.status >= 400:
-                summary.error_paths[entry.path] += 1
+                summary.error_paths[path] += 1
         if entry.method:
             summary.methods[entry.method] += 1
         if entry.agent:
