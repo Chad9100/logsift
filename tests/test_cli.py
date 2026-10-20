@@ -86,6 +86,25 @@ def test_path_grouping_flags(tmp_path, capsys):
     assert top_paths("--keep-query")[0]["value"] == "/items/1?x=1"
 
 
+def test_bandwidth_by_path_and_ip(capsys):
+    data = run_json(capsys)
+    # /blog/hello-world is served twice at 8340 bytes each.
+    assert data["bandwidth_by_path"][0] == {"value": "/blog/hello-world", "bytes": 16680}
+    # 198.51.100.7 fetched the post (8340) and a favicon 404 (153).
+    assert data["bandwidth_by_ip"][0] == {"value": "198.51.100.7", "bytes": 8493}
+    assert sum(r["bytes"] for r in data["bandwidth_by_ip"]) <= data["total_bytes"]
+    # Entries with 0 bytes (e.g. the 304 with "-") never appear.
+    assert all(r["bytes"] > 0 for r in data["bandwidth_by_path"])
+
+
+def test_bandwidth_text_sections(capsys):
+    assert main([SAMPLE, "--top", "2"]) == 0
+    out = capsys.readouterr().out
+    assert "Bandwidth by path" in out
+    assert "16.3 KB" in out and "/blog/hello-world" in out
+    assert "Bandwidth by IP" in out
+
+
 def test_top_limits_rankings(capsys):
     data = run_json(capsys, "--top", "1")
     assert len(data["top_ips"]) == 1

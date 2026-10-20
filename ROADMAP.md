@@ -13,7 +13,7 @@
 - [x] Requests-over-time histogram (per minute / hour / day) in the terminal
 - [x] Group paths: strip query strings, optionally collapse IDs (`/items/123` → `/items/:id`)
 - [x] Bot / crawler detection from user agents, with `--exclude-bots`
-- [ ] Bandwidth by path and by IP
+- [x] Bandwidth by path and by IP
 - [ ] Colored terminal output (auto-off when piped)
 
 ## v0.3 — more formats

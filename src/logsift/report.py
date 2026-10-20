@@ -49,6 +49,20 @@ def _timeline_chart(summary: Summary, bucket: str) -> list[str]:
     return lines + [""]
 
 
+def _bytes_table(title: str, counter: Counter, top: int, total: int) -> list[str]:
+    """Like _table, but values are byte counts shown in human units."""
+    rows = [(key, size) for key, size in counter.most_common(top) if size > 0]
+    if not rows:
+        return []
+    labels = [human_bytes(size) for _, size in rows]
+    width = max(len(label) for label in labels)
+    lines = [title]
+    for (key, size), label in zip(rows, labels):
+        pct = 100 * size / total if total else 0
+        lines.append(f"  {label:>{width}}  {pct:5.1f}%  {key}")
+    return lines + [""]
+
+
 def to_text(summary: Summary, top: int = 10, bucket: str = "auto") -> str:
     total = summary.total_requests
     lines = [
@@ -73,6 +87,8 @@ def to_text(summary: Summary, top: int = 10, bucket: str = "auto") -> str:
     lines += _timeline_chart(summary, bucket)
     lines += _table("Top paths", summary.paths, top, total)
     lines += _table("Top IPs", summary.ips, top, total)
+    lines += _bytes_table("Bandwidth by path", summary.path_bytes, top, summary.total_bytes)
+    lines += _bytes_table("Bandwidth by IP", summary.ip_bytes, top, summary.total_bytes)
     lines += _table("Status codes", summary.statuses, top, total)
     lines += _table("Paths with errors (4xx/5xx)", summary.error_paths, top, total)
     lines += _table("Top user agents", summary.agents, top, total)
@@ -83,6 +99,9 @@ def to_text(summary: Summary, top: int = 10, bucket: str = "auto") -> str:
 def to_dict(summary: Summary, top: int = 10, bucket: str = "auto") -> dict:
     def ranked(counter: Counter) -> list[dict]:
         return [{"value": k, "count": c} for k, c in counter.most_common(top)]
+
+    def bandwidth(counter: Counter) -> list[dict]:
+        return [{"value": k, "bytes": b} for k, b in counter.most_common(top) if b > 0]
 
     return {
         "total_requests": summary.total_requests,
@@ -98,6 +117,8 @@ def to_dict(summary: Summary, top: int = 10, bucket: str = "auto") -> dict:
         "status_codes": ranked(summary.statuses),
         "error_paths": ranked(summary.error_paths),
         "top_agents": ranked(summary.agents),
+        "bandwidth_by_path": bandwidth(summary.path_bytes),
+        "bandwidth_by_ip": bandwidth(summary.ip_bytes),
         "bot_requests": summary.bot_requests,
         "bot_rate": round(summary.bot_rate(), 4),
         "top_bots": ranked(summary.bot_agents),

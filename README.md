@@ -17,6 +17,7 @@ Built with Python 3.10+ (standard library only), tested with pytest.
 - Reads plain files, **`.gz`** rotated logs, several files at once, or **stdin**
 - Text report or **JSON** output for scripting
 - **Requests-over-time** bar chart, per minute / hour / day (`--bucket`, picked automatically by default)
+- **Bandwidth reports**: which pages and which visitors use the most data
 - **Bot detection**: shows how much traffic comes from crawlers, monitors and scripts
   (Googlebot, AhrefsBot, curl, python-requests, ...); `--exclude-bots` / `--only-bots`
 - **Path grouping**: query strings are stripped so `/search?q=a` and `/search?q=b` count

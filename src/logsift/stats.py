@@ -41,6 +41,8 @@ class Summary:
     methods: Counter[str] = field(default_factory=Counter)
     agents: Counter[str] = field(default_factory=Counter)
     error_paths: Counter[str] = field(default_factory=Counter)
+    path_bytes: Counter[str] = field(default_factory=Counter)
+    ip_bytes: Counter[str] = field(default_factory=Counter)
     bot_requests: int = 0
     bot_agents: Counter[str] = field(default_factory=Counter)
     # Requests per minute; coarser timelines are rolled up from this.
@@ -113,10 +115,12 @@ def summarize(
             summary.last_seen = entry.time
         summary.minutes[_truncate(entry.time, "minute")] += 1
         summary.ips[entry.ip] += 1
+        summary.ip_bytes[entry.ip] += entry.size
         summary.statuses[entry.status] += 1
         if entry.path:
             path = normalize_path(entry.path, strip_query, group_ids)
             summary.paths[path] += 1
+            summary.path_bytes[path] += entry.size
             if entry.status >= 400:
                 summary.error_paths[path] += 1
         if entry.method:
