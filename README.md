@@ -16,6 +16,8 @@ Built with Python 3.10+ (standard library only), tested with pytest.
 - Parses **Common** and **Combined** Log Format (Apache and Nginx defaults)
 - Reads plain files, **`.gz`** rotated logs, several files at once, or **stdin**
 - Text report or **JSON** output for scripting
+- **Colored output** in a terminal (errors in red, status classes by color); automatically
+  off when piped, when `NO_COLOR` is set, or with `--color never`
 - **Requests-over-time** bar chart, per minute / hour / day (`--bucket`, picked automatically by default)
 - **Bandwidth reports**: which pages and which visitors use the most data
 - **Bot detection**: shows how much traffic comes from crawlers, monitors and scripts
@@ -45,6 +47,7 @@ logsift access.log --status 5xx --since 2026-10-19T09:00
 logsift access.log --bucket day         # one chart row per day
 logsift access.log --exclude-bots       # human visitors only
 logsift access.log --group-ids          # /items/123 and /items/456 -> /items/:id
+logsift access.log --color always | less -R   # keep colors when paging
 cat access.log | logsift --format json
 python -m logsift access.log            # same thing without the script
 ```

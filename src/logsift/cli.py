@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 from . import __version__
 from .bots import is_bot
+from .color import Painter, enable_windows_ansi, want_color
 from .parser import iter_files, parse_lines
 from .report import to_json, to_text
 from .stats import summarize
@@ -37,6 +38,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("-f", "--format", choices=["text", "json"], default="text",
                         help="output format (default: text)")
+    parser.add_argument("--color", choices=["auto", "always", "never"], default="auto",
+                        help="color the text report (default: auto, i.e. only in a terminal "
+                             "and never when NO_COLOR is set)")
     parser.add_argument("-n", "--top", type=int, default=10, metavar="N",
                         help="rows to show in each ranking (default: 10)")
     parser.add_argument("-b", "--bucket", choices=["auto", "minute", "hour", "day"],
@@ -112,8 +116,17 @@ def main(argv: list[str] | None = None) -> int:
         strip_query=not args.keep_query,
         group_ids=args.group_ids,
     )
-    render = to_json if args.format == "json" else to_text
-    sys.stdout.write(render(summary, top=args.top, bucket=args.bucket))
+    if args.format == "json":
+        # JSON is for programs, so it never contains color codes.
+        sys.stdout.write(to_json(summary, top=args.top, bucket=args.bucket))
+        return 0
+
+    use_color = want_color(args.color)
+    if use_color:
+        enable_windows_ansi()
+    sys.stdout.write(
+        to_text(summary, top=args.top, bucket=args.bucket, paint=Painter(use_color))
+    )
     return 0
 
 
