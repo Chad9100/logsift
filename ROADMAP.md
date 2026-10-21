@@ -27,7 +27,7 @@
 
 - [x] Self-contained HTML report with charts
 - [x] `--follow` mode that tails a log and refreshes the summary
-- [ ] Streaming aggregation so very large logs don't need to fit in memory
+- [x] Streaming aggregation so very large logs don't need to fit in memory
 
 ## v1.0 — release
 

@@ -13,7 +13,7 @@ from .bots import is_bot
 from .color import Painter, enable_windows_ansi, want_color
 from .errorlog import parse_error_lines, summarize_errors
 from .follow import FollowState
-from .parser import LogEntry, iter_files, parse_line, parse_lines
+from .parser import LogEntry, iter_files, parse_line
 from .report import (
     to_csv,
     to_error_csv,
@@ -23,7 +23,7 @@ from .report import (
     to_json,
     to_text,
 )
-from .stats import summarize
+from .stats import stream_summarize, summarize
 
 
 def _parse_time(value: str) -> datetime:
@@ -244,19 +244,22 @@ def main(argv: list[str] | None = None) -> int:
         return _run_follow(args, status_ok)
 
     try:
-        result = parse_lines(iter_files(args.files))
+        # Single pass over the lines: never holds a list of every parsed
+        # entry, so very large log files don't need to fit in memory.
+        summary = stream_summarize(
+            iter_files(args.files),
+            status_ok=status_ok,
+            since=args.since,
+            until=args.until,
+            exclude_bots=args.exclude_bots,
+            only_bots=args.only_bots,
+            strip_query=not args.keep_query,
+            group_ids=args.group_ids,
+        )
     except OSError as exc:
         print(f"logsift: {exc}", file=sys.stderr)
         return 1
 
-    entries = _filter_entries(result.entries, args, status_ok)
-
-    summary = summarize(
-        entries,
-        skipped_lines=result.skipped,
-        strip_query=not args.keep_query,
-        group_ids=args.group_ids,
-    )
     if args.format in ("json", "csv", "html"):
         # None of these ever contain ANSI color codes.
         render = {"json": to_json, "csv": to_csv, "html": to_html}[args.format]

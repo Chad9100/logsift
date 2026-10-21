@@ -22,6 +22,8 @@ Built with Python 3.10+ (standard library only), tested with pytest.
   HTML report** with charts (`--format html`; no external assets or JavaScript)
 - **`--follow`**: watch growing log files and refresh the report live, like `tail -f`
   with a dashboard
+- **Streams large logs** instead of loading every request into memory first, so a
+  multi-gigabyte access log can be summarized without running out of RAM
 - **Colored output** in a terminal (errors in red, status classes by color); automatically
   off when piped, when `NO_COLOR` is set, or with `--color never`
 - **Requests-over-time** bar chart, per minute / hour / day (`--bucket`, picked automatically by default)
@@ -140,6 +142,17 @@ logsift error.log --log-type error --format json
 ```
 
 Run `logsift --help` for all options.
+
+### Large logs
+
+The default (non-`--follow`) run processes each file in a single streaming pass:
+it never holds a list of every parsed request, only the running counts, so the
+memory it uses depends on how many *distinct* paths, IPs, status codes, and so on
+appear in the log, not on how many requests there are. A log with a huge number of
+requests to a modest number of distinct pages summarizes in roughly constant
+memory; one with equally huge cardinality (millions of unique paths or IPs) will
+still use memory proportional to that, since the counts themselves have to be
+kept.
 
 ## Development
 

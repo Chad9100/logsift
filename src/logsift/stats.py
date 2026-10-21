@@ -5,10 +5,10 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Iterable
+from typing import Callable, Iterable
 
 from .bots import is_bot
-from .parser import LogEntry
+from .parser import LogEntry, parse_line
 from .paths import normalize_path
 
 BUCKETS = {
@@ -99,6 +99,32 @@ class Summary:
         return rows
 
 
+def _accumulate(summary: Summary, entry: LogEntry, strip_query: bool, group_ids: bool) -> None:
+    summary.total_requests += 1
+    summary.total_bytes += entry.size
+    if summary.first_seen is None or entry.time < summary.first_seen:
+        summary.first_seen = entry.time
+    if summary.last_seen is None or entry.time > summary.last_seen:
+        summary.last_seen = entry.time
+    summary.minutes[_truncate(entry.time, "minute")] += 1
+    summary.ips[entry.ip] += 1
+    summary.ip_bytes[entry.ip] += entry.size
+    summary.statuses[entry.status] += 1
+    if entry.path:
+        path = normalize_path(entry.path, strip_query, group_ids)
+        summary.paths[path] += 1
+        summary.path_bytes[path] += entry.size
+        if entry.status >= 400:
+            summary.error_paths[path] += 1
+    if entry.method:
+        summary.methods[entry.method] += 1
+    if entry.agent:
+        summary.agents[entry.agent] += 1
+    if is_bot(entry.agent):
+        summary.bot_requests += 1
+        summary.bot_agents[entry.agent or "(no user agent)"] += 1
+
+
 def summarize(
     entries: Iterable[LogEntry],
     skipped_lines: int = 0,
@@ -107,27 +133,47 @@ def summarize(
 ) -> Summary:
     summary = Summary(skipped_lines=skipped_lines)
     for entry in entries:
-        summary.total_requests += 1
-        summary.total_bytes += entry.size
-        if summary.first_seen is None or entry.time < summary.first_seen:
-            summary.first_seen = entry.time
-        if summary.last_seen is None or entry.time > summary.last_seen:
-            summary.last_seen = entry.time
-        summary.minutes[_truncate(entry.time, "minute")] += 1
-        summary.ips[entry.ip] += 1
-        summary.ip_bytes[entry.ip] += entry.size
-        summary.statuses[entry.status] += 1
-        if entry.path:
-            path = normalize_path(entry.path, strip_query, group_ids)
-            summary.paths[path] += 1
-            summary.path_bytes[path] += entry.size
-            if entry.status >= 400:
-                summary.error_paths[path] += 1
-        if entry.method:
-            summary.methods[entry.method] += 1
-        if entry.agent:
-            summary.agents[entry.agent] += 1
-        if is_bot(entry.agent):
-            summary.bot_requests += 1
-            summary.bot_agents[entry.agent or "(no user agent)"] += 1
+        _accumulate(summary, entry, strip_query, group_ids)
+    return summary
+
+
+def stream_summarize(
+    lines: Iterable[str],
+    *,
+    status_ok: Callable[[int], bool] | None = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
+    exclude_bots: bool = False,
+    only_bots: bool = False,
+    strip_query: bool = True,
+    group_ids: bool = False,
+) -> Summary:
+    """Parse, filter and aggregate log lines in a single pass.
+
+    Unlike summarize(parse_lines(lines).entries, ...), this never builds a
+    list of every parsed entry: it holds only the current line and the
+    running Summary (whose size depends on how many *distinct* paths, IPs,
+    etc. appear, not on how many requests there are), so very large logs
+    don't need to fit in memory. `lines` can be any one-pass iterable,
+    including a generator that reads a file lazily.
+    """
+    summary = Summary()
+    for line in lines:
+        if not line.strip():
+            continue
+        entry = parse_line(line)
+        if entry is None:
+            summary.skipped_lines += 1
+            continue
+        if status_ok is not None and not status_ok(entry.status):
+            continue
+        if since is not None and entry.time < since:
+            continue
+        if until is not None and entry.time >= until:
+            continue
+        if exclude_bots and is_bot(entry.agent):
+            continue
+        if only_bots and not is_bot(entry.agent):
+            continue
+        _accumulate(summary, entry, strip_query, group_ids)
     return summary
