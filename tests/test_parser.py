@@ -58,3 +58,18 @@ def test_iter_files_reads_gzip(tmp_path):
         fh.write(COMMON + "\n")
     result = parse_lines(iter_files([str(plain), str(packed)]))
     assert [e.status for e in result.entries] == [200, 404]
+
+
+def test_leading_utf8_bom_does_not_corrupt_the_first_ip(tmp_path):
+    # Notepad and PowerShell's `-Encoding utf8` both write a UTF-8 BOM;
+    # without stripping it, the BOM bytes would prefix the first IP field.
+    plain = tmp_path / "bom.log"
+    plain.write_bytes(b"\xef\xbb\xbf" + COMBINED.encode("utf-8") + b"\n")
+    result = parse_lines(iter_files([str(plain)]))
+    assert [e.ip for e in result.entries] == ["192.0.2.10"]
+
+    packed = tmp_path / "bom.log.gz"
+    with gzip.open(packed, "wb") as fh:
+        fh.write(b"\xef\xbb\xbf" + COMMON.encode("utf-8") + b"\n")
+    result = parse_lines(iter_files([str(packed)]))
+    assert [e.ip for e in result.entries] == ["198.51.100.7"]

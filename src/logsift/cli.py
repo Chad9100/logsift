@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 from . import __version__
 from .bots import is_bot
 from .color import Painter, enable_windows_ansi, want_color
 from .errorlog import parse_error_lines, summarize_errors
-from .parser import iter_files, parse_lines
+from .follow import FollowState
+from .parser import LogEntry, iter_files, parse_line, parse_lines
 from .report import (
     to_csv,
     to_error_csv,
@@ -78,6 +81,12 @@ def build_parser() -> argparse.ArgumentParser:
                       help="ignore bots, crawlers and scripts (curl, python-requests, ...)")
     bots.add_argument("--only-bots", action="store_true",
                       help="only count bots, crawlers and scripts")
+    parser.add_argument("-F", "--follow", action="store_true",
+                        help="watch the file(s) and refresh the report as new lines "
+                             "arrive, like tail -f (text format, access logs, real "
+                             "files only: not stdin or .gz)")
+    parser.add_argument("--interval", type=float, default=2.0, metavar="SECONDS",
+                        help="how often to refresh with --follow (default: 2)")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return parser
 
@@ -94,6 +103,20 @@ def _status_filter(spec: str):
         elif part:
             raise ValueError(f"invalid status filter {part!r}")
     return lambda status: status in exact or status // 100 in classes
+
+
+def _filter_entries(entries: list[LogEntry], args, status_ok) -> list[LogEntry]:
+    if status_ok:
+        entries = [e for e in entries if status_ok(e.status)]
+    if args.since:
+        entries = [e for e in entries if e.time >= args.since]
+    if args.until:
+        entries = [e for e in entries if e.time < args.until]
+    if args.exclude_bots:
+        entries = [e for e in entries if not is_bot(e.agent)]
+    if args.only_bots:
+        entries = [e for e in entries if is_bot(e.agent)]
+    return entries
 
 
 def _run_error_log(args, parser: argparse.ArgumentParser) -> int:
@@ -124,6 +147,68 @@ def _run_error_log(args, parser: argparse.ArgumentParser) -> int:
     return 0
 
 
+CLEAR_SCREEN = "\x1b[2J\x1b[H"
+
+
+def _run_follow(
+    args,
+    status_ok,
+    *,
+    max_ticks: int | None = None,
+    sleep_fn=time.sleep,
+) -> int:
+    """The --follow loop: poll watched files, re-summarize, and redraw.
+
+    max_ticks and sleep_fn exist only so tests can run this deterministically,
+    without real waiting or an unbounded loop; production always leaves them
+    at their defaults (run forever, real time.sleep).
+    """
+    paths = [Path(f) for f in args.files]
+    use_color = want_color(args.color)
+    if use_color:
+        enable_windows_ansi()
+
+    entries: list[LogEntry] = []
+    skipped = 0
+    tick = 0
+    with FollowState(paths) as state:
+        try:
+            while max_ticks is None or tick < max_ticks:
+                new_entries = []
+                for raw in state.new_lines():
+                    entry = parse_line(raw)
+                    if entry is None:
+                        if raw.strip():
+                            skipped += 1
+                    else:
+                        new_entries.append(entry)
+                entries.extend(_filter_entries(new_entries, args, status_ok))
+
+                summary = summarize(
+                    entries,
+                    skipped_lines=skipped,
+                    strip_query=not args.keep_query,
+                    group_ids=args.group_ids,
+                )
+                report = to_text(summary, top=args.top, bucket=args.bucket,
+                                  paint=Painter(use_color))
+                watching = ", ".join(str(p) for p in paths)
+                header = (
+                    f"Watching {watching} "
+                    f"(updated {datetime.now():%H:%M:%S}, Ctrl+C to stop)\n\n"
+                )
+                prefix = CLEAR_SCREEN if sys.stdout.isatty() else ""
+                sys.stdout.write(prefix + header + report)
+                sys.stdout.flush()
+
+                tick += 1
+                if max_ticks is None or tick < max_ticks:
+                    sleep_fn(args.interval)
+        except KeyboardInterrupt:
+            print()
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -131,6 +216,21 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--top must be at least 1")
     if args.log_type == "error" and args.format == "html":
         parser.error("--format html is not supported with --log-type error yet")
+    if args.follow:
+        if args.log_type == "error":
+            parser.error("--follow is not supported with --log-type error yet")
+        if args.format != "text":
+            parser.error("--follow only supports --format text")
+        if args.interval <= 0:
+            parser.error("--interval must be greater than 0")
+        if "-" in args.files:
+            parser.error("--follow cannot read from stdin")
+        for name in args.files:
+            path = Path(name)
+            if path.suffix == ".gz":
+                parser.error(f"--follow cannot tail a compressed file: {name}")
+            if not path.is_file():
+                parser.error(f"--follow: no such file: {name}")
 
     if args.log_type == "error":
         return _run_error_log(args, parser)
@@ -140,23 +240,16 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         parser.error(str(exc))
 
+    if args.follow:
+        return _run_follow(args, status_ok)
+
     try:
         result = parse_lines(iter_files(args.files))
     except OSError as exc:
         print(f"logsift: {exc}", file=sys.stderr)
         return 1
 
-    entries = result.entries
-    if status_ok:
-        entries = [e for e in entries if status_ok(e.status)]
-    if args.since:
-        entries = [e for e in entries if e.time >= args.since]
-    if args.until:
-        entries = [e for e in entries if e.time < args.until]
-    if args.exclude_bots:
-        entries = [e for e in entries if not is_bot(e.agent)]
-    if args.only_bots:
-        entries = [e for e in entries if is_bot(e.agent)]
+    entries = _filter_entries(result.entries, args, status_ok)
 
     summary = summarize(
         entries,

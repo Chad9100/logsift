@@ -169,12 +169,17 @@ def parse_json_line(line: str) -> LogEntry | None:
 
 
 def open_log(path: str) -> TextIO:
-    """Open a log file for reading; '-' means stdin and .gz files are decompressed."""
+    """Open a log file for reading; '-' means stdin and .gz files are decompressed.
+
+    Uses utf-8-sig so a leading UTF-8 BOM (written by Notepad, PowerShell's
+    `-Encoding utf8`, and some Windows log tools) is stripped instead of
+    silently corrupting the first field of the first line.
+    """
     if path == "-":
-        return io.TextIOWrapper(sys.stdin.buffer, encoding="utf-8", errors="replace")
+        return io.TextIOWrapper(sys.stdin.buffer, encoding="utf-8-sig", errors="replace")
     if Path(path).suffix == ".gz":
-        return gzip.open(path, "rt", encoding="utf-8", errors="replace")
-    return open(path, encoding="utf-8", errors="replace")
+        return gzip.open(path, "rt", encoding="utf-8-sig", errors="replace")
+    return open(path, encoding="utf-8-sig", errors="replace")
 
 
 @dataclass

@@ -20,6 +20,8 @@ Built with Python 3.10+ (standard library only), tested with pytest.
 - Reads plain files, **`.gz`** rotated logs, several files at once, or **stdin**
 - Text report, **JSON** for scripting, **CSV** for spreadsheets, or a **self-contained
   HTML report** with charts (`--format html`; no external assets or JavaScript)
+- **`--follow`**: watch growing log files and refresh the report live, like `tail -f`
+  with a dashboard
 - **Colored output** in a terminal (errors in red, status classes by color); automatically
   off when piped, when `NO_COLOR` is set, or with `--color never`
 - **Requests-over-time** bar chart, per minute / hour / day (`--bucket`, picked automatically by default)
@@ -56,6 +58,7 @@ logsift access.log --format csv > report.csv  # open in a spreadsheet
 logsift /var/log/nginx/error.log --log-type error   # levels, top messages, top clients
 logsift examples/sample_access.jsonl                # JSON-lines logs work the same way
 logsift access.log --format html > report.html      # open the file in a browser
+logsift /var/log/nginx/access.log --follow           # live dashboard, Ctrl+C to stop
 cat access.log | logsift --format json
 python -m logsift access.log            # same thing without the script
 ```
@@ -91,6 +94,16 @@ Top IPs
 `--format csv` writes every table (top paths, IPs, bandwidth, status codes, error
 paths, user agents, bots, and the timeline) into one CSV, tagged by a `section`
 column, so you can filter or pivot on it in a spreadsheet.
+
+### Follow mode
+
+`--follow` (`-F`) shows the existing report and then keeps it updated as new lines
+are appended, refreshing every `--interval` seconds (default 2) until you press
+Ctrl+C. It works on real files only, not stdin or `.gz`, and only with the default
+text format. All the usual filters (`--status`, `--since`, `--exclude-bots`, ...)
+still apply. A log rotated by renaming or shrinking in place is picked up
+automatically; a same-size-or-larger rotation can't be told apart from normal
+growth, a limitation shared by any simple polling-based tail.
 
 ### HTML report
 
