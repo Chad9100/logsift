@@ -1,15 +1,18 @@
-"""Parse Apache/Nginx access log lines (Common and Combined Log Format)."""
+"""Parse access log lines: Apache/Nginx Common/Combined Log Format, and
+JSON-lines access logs (one JSON object per line, as written by Caddy,
+Traefik, or Nginx's own json_escape log_format)."""
 
 from __future__ import annotations
 
 import gzip
 import io
+import json
 import re
 import sys
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, Iterator, TextIO
+from typing import Any, Iterable, Iterator, TextIO
 
 # Combined Log Format; the trailing referrer/user-agent part is optional so
 # Common Log Format lines match too.
@@ -43,10 +46,12 @@ def _dash_to_none(value: str | None) -> str | None:
 
 
 def parse_line(line: str) -> LogEntry | None:
-    """Parse one log line. Returns None if the line is not a valid entry."""
+    """Parse one log line, Common/Combined Log Format or a JSON-lines access
+    log entry (auto-detected). Returns None if the line is not a valid entry.
+    """
     match = LINE_RE.match(line.strip())
     if not match:
-        return None
+        return parse_json_line(line)
     try:
         time = datetime.strptime(match["time"], TIME_FORMAT)
     except ValueError:
@@ -71,6 +76,95 @@ def parse_line(line: str) -> LogEntry | None:
         size=0 if size == "-" else int(size),
         referrer=_dash_to_none(match["referrer"]),
         agent=_dash_to_none(match["agent"]),
+    )
+
+
+# Field-name variants seen across different JSON access log configurations
+# (plain field names, Caddy's "request"-nested names, and Traefik's PascalCase).
+_TIME_KEYS = ("time", "timestamp", "time_local", "StartUTC", "start_time")
+_EPOCH_KEYS = ("ts", "unix_time", "epoch")
+_IP_KEYS = ("remote_addr", "client_ip", "remote_ip", "ip", "ClientHost")
+_USER_KEYS = ("user", "remote_user", "ClientUsername")
+_METHOD_KEYS = ("method", "request_method", "RequestMethod")
+_PATH_KEYS = ("path", "uri", "request_uri", "url", "RequestPath")
+_PROTOCOL_KEYS = ("protocol", "proto", "request_protocol", "RequestProtocol")
+_STATUS_KEYS = ("status", "status_code", "DownstreamStatus", "OriginStatus")
+_SIZE_KEYS = ("size", "bytes", "body_bytes_sent", "resp_bytes", "bytes_sent",
+              "DownstreamContentSize")
+_REFERRER_KEYS = ("referer", "referrer", "http_referer")
+_AGENT_KEYS = ("user_agent", "agent", "http_user_agent", "RequestUserAgent")
+
+
+def _first(fields: dict[str, Any], keys: tuple[str, ...]) -> Any:
+    for key in keys:
+        if key in fields and fields[key] not in (None, ""):
+            return fields[key]
+    return None
+
+
+def _json_time(fields: dict[str, Any]) -> datetime | None:
+    epoch = _first(fields, _EPOCH_KEYS)
+    if isinstance(epoch, (int, float)):
+        return datetime.fromtimestamp(epoch, tz=timezone.utc)
+
+    raw = _first(fields, _TIME_KEYS)
+    if not isinstance(raw, str):
+        return None
+    try:
+        value = raw[:-1] + "+00:00" if raw.endswith("Z") else raw
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        try:
+            parsed = datetime.strptime(raw, TIME_FORMAT)
+        except ValueError:
+            return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def parse_json_line(line: str) -> LogEntry | None:
+    """Parse one JSON-lines access log entry. Returns None if it isn't one."""
+    stripped = line.strip()
+    if not stripped.startswith("{"):
+        return None
+    try:
+        obj = json.loads(stripped)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(obj, dict):
+        return None
+
+    fields = dict(obj)
+    nested = obj.get("request")
+    if isinstance(nested, dict):  # Caddy nests method/uri/proto/remote_ip here
+        for key, value in nested.items():
+            fields.setdefault(key, value)
+
+    time = _json_time(fields)
+    ip = _first(fields, _IP_KEYS)
+    status = _first(fields, _STATUS_KEYS)
+    if time is None or not isinstance(ip, str) or not isinstance(status, (int, float)):
+        return None
+
+    size = _first(fields, _SIZE_KEYS)
+    method = _first(fields, _METHOD_KEYS)
+    path = _first(fields, _PATH_KEYS)
+    protocol = _first(fields, _PROTOCOL_KEYS)
+    if method is None and path is None and isinstance(fields.get("request"), str):
+        parts = fields["request"].split()
+        if len(parts) == 3:
+            method, path, protocol = parts
+
+    return LogEntry(
+        ip=ip,
+        user=_first(fields, _USER_KEYS),
+        time=time,
+        method=method,
+        path=path,
+        protocol=protocol,
+        status=int(status),
+        size=int(size) if isinstance(size, (int, float)) else 0,
+        referrer=_first(fields, _REFERRER_KEYS),
+        agent=_first(fields, _AGENT_KEYS),
     )
 
 

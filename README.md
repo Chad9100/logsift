@@ -14,7 +14,9 @@ Built with Python 3.10+ (standard library only), tested with pytest.
 ## Features
 
 - Parses **Common** and **Combined** access log format (Apache and Nginx defaults),
-  and **Nginx error logs** (`--log-type error`)
+  **JSON-lines access logs** (Caddy, Traefik, or a custom JSON log_format;
+  auto-detected, mixed freely with CLF lines), and **Nginx error logs**
+  (`--log-type error`)
 - Reads plain files, **`.gz`** rotated logs, several files at once, or **stdin**
 - Text report, **JSON** for scripting, or **CSV** for spreadsheets (`--format csv`)
 - **Colored output** in a terminal (errors in red, status classes by color); automatically
@@ -51,6 +53,7 @@ logsift access.log --group-ids          # /items/123 and /items/456 -> /items/:i
 logsift access.log --color always | less -R   # keep colors when paging
 logsift access.log --format csv > report.csv  # open in a spreadsheet
 logsift /var/log/nginx/error.log --log-type error   # levels, top messages, top clients
+logsift examples/sample_access.jsonl                # JSON-lines logs work the same way
 cat access.log | logsift --format json
 python -m logsift access.log            # same thing without the script
 ```
@@ -86,6 +89,18 @@ Top IPs
 `--format csv` writes every table (top paths, IPs, bandwidth, status codes, error
 paths, user agents, bots, and the timeline) into one CSV, tagged by a `section`
 column, so you can filter or pivot on it in a spreadsheet.
+
+### JSON-lines access logs
+
+If a line doesn't match Common/Combined Log Format but starts with `{`, logsift
+tries to read it as one JSON object per line, and recognizes the common field
+names used by Caddy, Traefik and custom JSON `log_format` configurations:
+`time`/`ts`/`timestamp`/`StartUTC` for the timestamp (ISO 8601 or Unix epoch),
+`remote_addr`/`client_ip`/`ip`/`ClientHost` for the IP, `method`/`path`/`protocol`
+(or a combined `"request": "GET /x HTTP/1.1"` string) or their Caddy/Traefik
+equivalents, `status`/`DownstreamStatus`, `size`/`bytes`/`DownstreamContentSize`,
+`referer`, and `user_agent`. CLF and JSON lines can be mixed in the same file.
+A line is only counted as unparseable if neither format matches it.
 
 ### Nginx error logs
 

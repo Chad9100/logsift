@@ -1,0 +1,5 @@
+{"time": "2026-10-19T08:01:12Z", "remote_addr": "192.0.2.10", "method": "GET", "path": "/index.html", "protocol": "HTTP/1.1", "status": 200, "size": 5120, "referer": "https://example.com/", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+{"ts": 1792397140.0, "status": 200, "size": 8340, "request": {"remote_ip": "198.51.100.7", "method": "GET", "uri": "/blog/hello-world", "proto": "HTTP/2.0"}}
+{"StartUTC": "2026-10-19T09:12:03+00:00", "ClientHost": "203.0.113.25", "RequestMethod": "POST", "RequestPath": "/api/login", "RequestProtocol": "HTTP/1.1", "DownstreamStatus": 401, "DownstreamContentSize": 64}
+{"time": "19/Oct/2026:10:00:00 +0000", "ip": "192.0.2.44", "request": "GET /wp-admin/ HTTP/1.1", "status": 404, "bytes": 153}
+not a json line and not a CLF line either

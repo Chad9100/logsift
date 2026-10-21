@@ -20,7 +20,7 @@
 
 - [ ] Custom log formats via Nginx `log_format` / Apache `LogFormat` strings
 - [x] Nginx error log support
-- [ ] JSON-lines access logs (Caddy, Traefik)
+- [x] JSON-lines access logs (Caddy, Traefik)
 - [x] CSV export
 
 ## v0.4 — dashboards and live mode
