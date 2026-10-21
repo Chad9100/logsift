@@ -1,0 +1,7 @@
+2026/10/19 08:01:13 [error] 1234#0: *56 open() "/var/www/favicon.ico" failed (2: No such file or directory), client: 198.51.100.7, server: example.com, request: "GET /favicon.ico HTTP/1.1", host: "example.com"
+2026/10/19 08:05:41 [error] 1234#0: *57 open() "/var/www/robots.txt" failed (2: No such file or directory), client: 192.0.2.44, server: example.com, request: "GET /robots.txt HTTP/1.1", host: "example.com"
+2026/10/19 09:12:03 [warn] 1234#0: *58 client intended to send too large body: 15728640 bytes, client: 203.0.113.25, server: example.com, request: "POST /api/upload HTTP/1.1", host: "example.com"
+2026/10/19 09:12:30 [error] 1234#0: *59 connect() failed (111: Connection refused) while connecting to upstream, client: 203.0.113.25, server: example.com, request: "GET /api/items HTTP/1.1", upstream: "http://127.0.0.1:8080/api/items", host: "example.com"
+2026/10/19 10:00:00 [notice] 1234#0: signal 15 (SIGTERM) received, exiting
+2026/10/19 11:30:16 [crit] 1234#0: *60 SSL_do_handshake() failed (SSL: error:0A00010B) while SSL handshaking, client: 198.51.100.90, server: 0.0.0.0:443
+not a valid error log line

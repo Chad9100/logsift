@@ -9,8 +9,9 @@ from datetime import datetime, timezone
 from . import __version__
 from .bots import is_bot
 from .color import Painter, enable_windows_ansi, want_color
+from .errorlog import parse_error_lines, summarize_errors
 from .parser import iter_files, parse_lines
-from .report import to_csv, to_json, to_text
+from .report import to_csv, to_error_csv, to_error_json, to_error_text, to_json, to_text
 from .stats import summarize
 
 
@@ -38,6 +39,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("-f", "--format", choices=["text", "json", "csv"], default="text",
                         help="output format (default: text)")
+    parser.add_argument("--log-type", choices=["access", "error"], default="access",
+                        help="access (default): Apache/Nginx access log. "
+                             "error: Nginx error log; only --since/--until/--top/"
+                             "--format/--color apply")
     parser.add_argument("--color", choices=["auto", "always", "never"], default="auto",
                         help="color the text report (default: auto, i.e. only in a terminal "
                              "and never when NO_COLOR is set)")
@@ -81,11 +86,42 @@ def _status_filter(spec: str):
     return lambda status: status in exact or status // 100 in classes
 
 
+def _run_error_log(args, parser: argparse.ArgumentParser) -> int:
+    try:
+        result = parse_error_lines(iter_files(args.files))
+    except OSError as exc:
+        print(f"logsift: {exc}", file=sys.stderr)
+        return 1
+
+    entries = result.entries
+    # Nginx error logs have no UTC offset, so --since/--until (always UTC-aware)
+    # are compared as naive local times here.
+    if args.since:
+        entries = [e for e in entries if e.time >= args.since.replace(tzinfo=None)]
+    if args.until:
+        entries = [e for e in entries if e.time < args.until.replace(tzinfo=None)]
+
+    summary = summarize_errors(entries, skipped_lines=result.skipped)
+    if args.format in ("json", "csv"):
+        render = to_error_json if args.format == "json" else to_error_csv
+        sys.stdout.write(render(summary, top=args.top))
+        return 0
+
+    use_color = want_color(args.color)
+    if use_color:
+        enable_windows_ansi()
+    sys.stdout.write(to_error_text(summary, top=args.top, paint=Painter(use_color)))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.top < 1:
         parser.error("--top must be at least 1")
+
+    if args.log_type == "error":
+        return _run_error_log(args, parser)
 
     try:
         status_ok = _status_filter(args.status) if args.status else None

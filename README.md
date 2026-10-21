@@ -13,7 +13,8 @@ Built with Python 3.10+ (standard library only), tested with pytest.
 
 ## Features
 
-- Parses **Common** and **Combined** Log Format (Apache and Nginx defaults)
+- Parses **Common** and **Combined** access log format (Apache and Nginx defaults),
+  and **Nginx error logs** (`--log-type error`)
 - Reads plain files, **`.gz`** rotated logs, several files at once, or **stdin**
 - Text report, **JSON** for scripting, or **CSV** for spreadsheets (`--format csv`)
 - **Colored output** in a terminal (errors in red, status classes by color); automatically
@@ -49,6 +50,7 @@ logsift access.log --exclude-bots       # human visitors only
 logsift access.log --group-ids          # /items/123 and /items/456 -> /items/:id
 logsift access.log --color always | less -R   # keep colors when paging
 logsift access.log --format csv > report.csv  # open in a spreadsheet
+logsift /var/log/nginx/error.log --log-type error   # levels, top messages, top clients
 cat access.log | logsift --format json
 python -m logsift access.log            # same thing without the script
 ```
@@ -84,6 +86,19 @@ Top IPs
 `--format csv` writes every table (top paths, IPs, bandwidth, status codes, error
 paths, user agents, bots, and the timeline) into one CSV, tagged by a `section`
 column, so you can filter or pivot on it in a spreadsheet.
+
+### Nginx error logs
+
+`--log-type error` switches to a separate report: entry counts by severity level
+(`debug` to `emerg`), the most common messages (grouped by replacing quoted paths
+and numbers, so the same error from different requests counts as one), the busiest
+client IPs, and the requests involved. Only `--since`, `--until`, `--top`,
+`--format` and `--color` apply in this mode; the access-log-only options
+(`--status`, `--group-ids`, `--exclude-bots`, ...) are ignored.
+
+```
+logsift error.log --log-type error --format json
+```
 
 Run `logsift --help` for all options.
 

@@ -8,6 +8,7 @@ import json
 from collections import Counter
 
 from .color import Painter
+from .errorlog import ErrorSummary
 from .stats import Summary
 
 
@@ -198,5 +199,74 @@ def to_csv(summary: Summary, top: int = 10, bucket: str = "auto") -> str:
 
     for row in data["timeline"]:
         writer.writerow(["timeline", row["start"], row["count"], "", ""])
+
+    return out.getvalue()
+
+
+def level_style(level: str) -> str:
+    """Color name for an Nginx error log severity level."""
+    if level in ("emerg", "alert", "crit", "error"):
+        return "red"
+    if level == "warn":
+        return "yellow"
+    if level == "debug":
+        return "dim"
+    return "cyan"  # notice, info, and anything unrecognized
+
+
+def to_error_text(summary: ErrorSummary, top: int = 10, paint: Painter = PLAIN) -> str:
+    lines = [f"Entries:       {summary.total}"]
+    if summary.first_seen and summary.last_seen:
+        lines.append(f"Time range:    {summary.first_seen} -> {summary.last_seen}")
+    if summary.skipped_lines:
+        lines.append(paint(f"Skipped lines: {summary.skipped_lines} (unparseable)", "yellow"))
+    lines.append("")
+
+    if summary.levels:
+        lines.append(paint("Levels", "bold", "cyan"))
+        width = max(len(str(c)) for c in summary.levels.values())
+        for level, count in summary.levels.most_common():
+            lines.append(f"  {count:>{width}}  {paint(level, level_style(level))}")
+        lines.append("")
+
+    lines += _table("Top messages", summary.messages, top, summary.total, paint)
+    lines += _table("Top client IPs", summary.clients, top, summary.total, paint)
+    lines += _table("Top requests", summary.requests, top, summary.total, paint)
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def to_error_dict(summary: ErrorSummary, top: int = 10) -> dict:
+    def ranked(counter: Counter) -> list[dict]:
+        return [{"value": k, "count": c} for k, c in counter.most_common(top)]
+
+    return {
+        "total": summary.total,
+        "skipped_lines": summary.skipped_lines,
+        "first_seen": summary.first_seen.isoformat() if summary.first_seen else None,
+        "last_seen": summary.last_seen.isoformat() if summary.last_seen else None,
+        "levels": dict(summary.levels.most_common()),
+        "top_messages": ranked(summary.messages),
+        "top_clients": ranked(summary.clients),
+        "top_requests": ranked(summary.requests),
+    }
+
+
+def to_error_json(summary: ErrorSummary, top: int = 10) -> str:
+    return json.dumps(to_error_dict(summary, top), indent=2) + "\n"
+
+
+def to_error_csv(summary: ErrorSummary, top: int = 10) -> str:
+    data = to_error_dict(summary, top)
+    out = io.StringIO(newline="")
+    writer = csv.writer(out)
+    writer.writerow(["section", "value", "count", "percent"])
+
+    for level, count in data["levels"].items():
+        pct = round(100 * count / data["total"], 2) if data["total"] else 0
+        writer.writerow(["levels", level, count, pct])
+    for section in ("top_messages", "top_clients", "top_requests"):
+        for row in data[section]:
+            pct = round(100 * row["count"] / data["total"], 2) if data["total"] else 0
+            writer.writerow([section, row["value"], row["count"], pct])
 
     return out.getvalue()
