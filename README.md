@@ -39,6 +39,9 @@ Built with Python 3.10+ (standard library only), tested with pytest.
 
 ## Install
 
+Not yet published to PyPI — see [PUBLISHING.md](PUBLISHING.md) for what's left to
+do that. Until then, install from source:
+
 ```bash
 git clone https://github.com/Chad9100/logsift.git
 cd logsift

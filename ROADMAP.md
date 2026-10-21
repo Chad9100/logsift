@@ -31,6 +31,9 @@
 
 ## v1.0 — release
 
-- [ ] Publish to PyPI
+- [x] Packaging, PyPI metadata and a trusted-publishing release workflow are
+      ready and verified (build it, install the built wheel, run it); the
+      actual first publish needs a PyPI account step only you can do — see
+      [PUBLISHING.md](PUBLISHING.md)
 - [ ] Documentation site with recipes
 - [x] Benchmarks on large logs
