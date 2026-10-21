@@ -11,7 +11,15 @@ from .bots import is_bot
 from .color import Painter, enable_windows_ansi, want_color
 from .errorlog import parse_error_lines, summarize_errors
 from .parser import iter_files, parse_lines
-from .report import to_csv, to_error_csv, to_error_json, to_error_text, to_json, to_text
+from .report import (
+    to_csv,
+    to_error_csv,
+    to_error_json,
+    to_error_text,
+    to_html,
+    to_json,
+    to_text,
+)
 from .stats import summarize
 
 
@@ -37,12 +45,14 @@ def build_parser() -> argparse.ArgumentParser:
         "files", nargs="*", default=["-"],
         help="log files to read (.gz supported); '-' or nothing reads stdin",
     )
-    parser.add_argument("-f", "--format", choices=["text", "json", "csv"], default="text",
-                        help="output format (default: text)")
+    parser.add_argument("-f", "--format", choices=["text", "json", "csv", "html"],
+                        default="text",
+                        help="output format (default: text); html writes a "
+                             "self-contained report (no external assets or JS)")
     parser.add_argument("--log-type", choices=["access", "error"], default="access",
                         help="access (default): Apache/Nginx access log. "
                              "error: Nginx error log; only --since/--until/--top/"
-                             "--format/--color apply")
+                             "--format/--color apply (html not supported yet)")
     parser.add_argument("--color", choices=["auto", "always", "never"], default="auto",
                         help="color the text report (default: auto, i.e. only in a terminal "
                              "and never when NO_COLOR is set)")
@@ -119,6 +129,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.top < 1:
         parser.error("--top must be at least 1")
+    if args.log_type == "error" and args.format == "html":
+        parser.error("--format html is not supported with --log-type error yet")
 
     if args.log_type == "error":
         return _run_error_log(args, parser)
@@ -152,10 +164,9 @@ def main(argv: list[str] | None = None) -> int:
         strip_query=not args.keep_query,
         group_ids=args.group_ids,
     )
-    if args.format in ("json", "csv"):
-        # JSON and CSV are for programs and spreadsheets, so neither ever
-        # contains color codes.
-        render = to_json if args.format == "json" else to_csv
+    if args.format in ("json", "csv", "html"):
+        # None of these ever contain ANSI color codes.
+        render = {"json": to_json, "csv": to_csv, "html": to_html}[args.format]
         sys.stdout.write(render(summary, top=args.top, bucket=args.bucket))
         return 0
 

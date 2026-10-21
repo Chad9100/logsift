@@ -18,7 +18,8 @@ Built with Python 3.10+ (standard library only), tested with pytest.
   auto-detected, mixed freely with CLF lines), and **Nginx error logs**
   (`--log-type error`)
 - Reads plain files, **`.gz`** rotated logs, several files at once, or **stdin**
-- Text report, **JSON** for scripting, or **CSV** for spreadsheets (`--format csv`)
+- Text report, **JSON** for scripting, **CSV** for spreadsheets, or a **self-contained
+  HTML report** with charts (`--format html`; no external assets or JavaScript)
 - **Colored output** in a terminal (errors in red, status classes by color); automatically
   off when piped, when `NO_COLOR` is set, or with `--color never`
 - **Requests-over-time** bar chart, per minute / hour / day (`--bucket`, picked automatically by default)
@@ -54,6 +55,7 @@ logsift access.log --color always | less -R   # keep colors when paging
 logsift access.log --format csv > report.csv  # open in a spreadsheet
 logsift /var/log/nginx/error.log --log-type error   # levels, top messages, top clients
 logsift examples/sample_access.jsonl                # JSON-lines logs work the same way
+logsift access.log --format html > report.html      # open the file in a browser
 cat access.log | logsift --format json
 python -m logsift access.log            # same thing without the script
 ```
@@ -89,6 +91,15 @@ Top IPs
 `--format csv` writes every table (top paths, IPs, bandwidth, status codes, error
 paths, user agents, bots, and the timeline) into one CSV, tagged by a `section`
 column, so you can filter or pivot on it in a spreadsheet.
+
+### HTML report
+
+`--format html` writes one self-contained HTML file: summary cards, a status-class
+breakdown, a requests-over-time chart (inline SVG, with a tooltip per bar), and every
+table from the text report, with status codes colored by class. There's no
+JavaScript, no external stylesheet or font, and it follows your system's light/dark
+theme. Values from the log are HTML-escaped, so a log with unusual content in it
+can't inject markup into the report. Not yet available for `--log-type error`.
 
 ### JSON-lines access logs
 

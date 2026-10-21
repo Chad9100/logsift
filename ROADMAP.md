@@ -25,7 +25,7 @@
 
 ## v0.4 — dashboards and live mode
 
-- [ ] Self-contained HTML report with charts
+- [x] Self-contained HTML report with charts
 - [ ] `--follow` mode that tails a log and refreshes the summary
 - [ ] Streaming aggregation so very large logs don't need to fit in memory
 

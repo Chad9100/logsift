@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import html
 import io
 import json
 from collections import Counter
@@ -270,3 +271,193 @@ def to_error_csv(summary: ErrorSummary, top: int = 10) -> str:
             writer.writerow([section, row["value"], row["count"], pct])
 
     return out.getvalue()
+
+
+# --- Self-contained HTML report (inline CSS and SVG, no external assets or JS) ---
+
+_HTML_CSS = """
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff; --fg: #1a1a1a; --muted: #5d6673; --border: #e2e5e9;
+  --card: #f6f8fa; --accent: #0969da;
+  --red-bg: #fde2e1; --red-fg: #8b1a1a;
+  --yellow-bg: #fff4ce; --yellow-fg: #7a5b00;
+  --green-bg: #dafbe1; --green-fg: #116329;
+  --cyan-bg: #ddf4ff; --cyan-fg: #0550ae;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117; --fg: #e6edf3; --muted: #9198a1; --border: #30363d;
+    --card: #161b22; --accent: #58a6ff;
+    --red-bg: #3a1618; --red-fg: #ffa198;
+    --yellow-bg: #3a2e05; --yellow-fg: #e3b341;
+    --green-bg: #0f2a1a; --green-fg: #56d364;
+    --cyan-bg: #0c2d4a; --cyan-fg: #79c0ff;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 2rem 1rem 4rem; background: var(--bg); color: var(--fg);
+  font: 15px/1.5 -apple-system, "Segoe UI", system-ui, sans-serif;
+}
+main { max-width: 900px; margin: 0 auto; }
+h1 { margin: 0 0 .25rem; font-size: 1.6rem; }
+h2 { font-size: 1.05rem; margin: 2rem 0 .5rem; }
+.meta { color: var(--muted); margin: 0 0 1.5rem; font-size: .9rem; }
+.kpis { display: flex; flex-wrap: wrap; gap: .75rem; margin-bottom: 1rem; }
+.kpi {
+  background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+  padding: .75rem 1rem; min-width: 9rem; flex: 1 1 9rem;
+}
+.kpi-label { color: var(--muted); font-size: .8rem; text-transform: uppercase;
+  letter-spacing: .03em; }
+.kpi-value { font-size: 1.4rem; font-weight: 600; }
+.kpi-red .kpi-value { color: var(--red-fg); }
+.kpi-yellow .kpi-value { color: var(--yellow-fg); }
+.kpi-green .kpi-value { color: var(--green-fg); }
+.badge {
+  display: inline-block; padding: .1rem .5rem; border-radius: 999px;
+  font-size: .8rem; font-weight: 600; margin: 0 .3rem .3rem 0;
+}
+.badge-red { background: var(--red-bg); color: var(--red-fg); }
+.badge-yellow { background: var(--yellow-bg); color: var(--yellow-fg); }
+.badge-green { background: var(--green-bg); color: var(--green-fg); }
+.badge-cyan { background: var(--cyan-bg); color: var(--cyan-fg); }
+.chart { border: 1px solid var(--border); border-radius: 8px; background: var(--card);
+  padding: .75rem; }
+.chart svg { display: block; width: 100%; }
+.chart rect { fill: var(--accent); }
+.chart-range { color: var(--muted); font-size: .8rem; margin: .4rem 0 0; }
+table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+th, td { text-align: left; padding: .35rem .5rem; border-bottom: 1px solid var(--border); }
+th { color: var(--muted); font-weight: 600; font-size: .8rem; text-transform: uppercase; }
+td:first-child, td:nth-child(2) { white-space: nowrap; font-variant-numeric: tabular-nums; }
+section { overflow-x: auto; }
+"""
+
+
+def _html_count_table(title: str, rows: list[dict], total: int, badge: bool = False) -> str:
+    if not rows:
+        return ""
+    body = []
+    for row in rows:
+        pct = round(100 * row["count"] / total, 1) if total else 0
+        value = html.escape(str(row["value"]))
+        if badge and isinstance(row["value"], int):
+            value = f'<span class="badge badge-{status_style(row["value"])}">{value}</span>'
+        body.append(f"<tr><td>{row['count']}</td><td>{pct}%</td><td>{value}</td></tr>")
+    return (
+        f"<section><h2>{html.escape(title)}</h2><table><thead><tr>"
+        f'<th scope="col">Count</th><th scope="col">%</th><th scope="col">Value</th>'
+        f"</tr></thead><tbody>{''.join(body)}</tbody></table></section>"
+    )
+
+
+def _html_bytes_table(title: str, rows: list[dict], total_bytes: int) -> str:
+    if not rows:
+        return ""
+    body = [
+        f"<tr><td>{human_bytes(row['bytes'])}</td>"
+        f"<td>{round(100 * row['bytes'] / total_bytes, 1) if total_bytes else 0}%</td>"
+        f"<td>{html.escape(str(row['value']))}</td></tr>"
+        for row in rows
+    ]
+    return (
+        f"<section><h2>{html.escape(title)}</h2><table><thead><tr>"
+        f'<th scope="col">Bytes</th><th scope="col">%</th><th scope="col">Value</th>'
+        f"</tr></thead><tbody>{''.join(body)}</tbody></table></section>"
+    )
+
+
+def _timeline_svg(rows: list[dict], width: int = 760, height: int = 140) -> str:
+    if not rows:
+        return ""
+    peak = max(row["count"] for row in rows) or 1
+    gap = 2
+    n = len(rows)
+    bar_width = max(1.0, (width - gap * (n - 1)) / n)
+    bars = []
+    for i, row in enumerate(rows):
+        x = i * (bar_width + gap)
+        bar_height = row["count"] / peak * height
+        y = height - bar_height
+        label = html.escape(f"{row['start']}: {row['count']}")
+        bars.append(
+            f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_width:.1f}" height="{bar_height:.1f}">'
+            f"<title>{label}</title></rect>"
+        )
+    return (
+        f'<svg viewBox="0 0 {width} {height}" preserveAspectRatio="none" role="img" '
+        f'aria-label="Requests over time">{"".join(bars)}</svg>'
+    )
+
+
+def to_html(summary: Summary, top: int = 10, bucket: str = "auto") -> str:
+    """One self-contained HTML report: inline CSS and SVG, no external assets or JS."""
+    data = to_dict(summary, top, bucket)
+    total_req, total_bytes = data["total_requests"], data["total_bytes"]
+
+    kpis = [
+        ("Requests", str(total_req), None),
+        ("Unique IPs", str(data["unique_ips"]), None),
+        ("Data sent", human_bytes(total_bytes), None),
+        ("Error rate", f'{data["error_rate"] * 100:.1f}%', _rate_style(data["error_rate"])),
+        ("Bot traffic", f'{data["bot_requests"]} ({data["bot_rate"] * 100:.1f}%)', None),
+    ]
+    kpi_html = "".join(
+        f'<div class="kpi{f" kpi-{style}" if style else ""}">'
+        f'<div class="kpi-label">{html.escape(label)}</div>'
+        f'<div class="kpi-value">{html.escape(value)}</div></div>'
+        for label, value, style in kpis
+    )
+
+    status_html = ""
+    if data["status_classes"]:
+        chips = "".join(
+            f'<span class="badge badge-{status_style(int(name[0]) * 100)}">'
+            f"{html.escape(name)}: {count}</span>"
+            for name, count in data["status_classes"].items()
+        )
+        status_html = f"<section><h2>Status classes</h2><p>{chips}</p></section>"
+
+    timeline_html = ""
+    if data["timeline"]:
+        bucket_name = html.escape(data["timeline_bucket"])
+        start = html.escape(data["timeline"][0]["start"])
+        end = html.escape(data["timeline"][-1]["start"])
+        timeline_html = (
+            f"<section><h2>Requests over time (per {bucket_name})</h2>"
+            f'<div class="chart">{_timeline_svg(data["timeline"])}</div>'
+            f'<p class="chart-range">{start} – {end}</p></section>'
+        )
+
+    sections = (
+        _html_count_table("Top paths", data["top_paths"], total_req)
+        + _html_count_table("Top IPs", data["top_ips"], total_req)
+        + _html_bytes_table("Bandwidth by path", data["bandwidth_by_path"], total_bytes)
+        + _html_bytes_table("Bandwidth by IP", data["bandwidth_by_ip"], total_bytes)
+        + _html_count_table("Status codes", data["status_codes"], total_req, badge=True)
+        + _html_count_table("Paths with errors (4xx/5xx)", data["error_paths"], total_req)
+        + _html_count_table("Top user agents", data["top_agents"], total_req)
+        + _html_count_table("Top bots", data["top_bots"], total_req)
+    )
+
+    meta_parts = []
+    if data["first_seen"] and data["last_seen"]:
+        meta_parts.append(
+            f'Time range: {html.escape(data["first_seen"])} – {html.escape(data["last_seen"])}'
+        )
+    if data["skipped_lines"]:
+        meta_parts.append(f'{data["skipped_lines"]} unparseable line(s) skipped')
+    meta_html = f'<p class="meta">{" · ".join(meta_parts)}</p>' if meta_parts else ""
+
+    return (
+        "<!doctype html>\n"
+        '<html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        f"<title>logsift report</title><style>{_HTML_CSS}</style></head>"
+        f"<body><main><h1>logsift report</h1>{meta_html}"
+        f'<div class="kpis">{kpi_html}</div>'
+        f"{status_html}{timeline_html}{sections}"
+        "</main></body></html>\n"
+    )
