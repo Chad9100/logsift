@@ -33,4 +33,4 @@
 
 - [ ] Publish to PyPI
 - [ ] Documentation site with recipes
-- [ ] Benchmarks on large logs
+- [x] Benchmarks on large logs

@@ -23,7 +23,8 @@ Built with Python 3.10+ (standard library only), tested with pytest.
 - **`--follow`**: watch growing log files and refresh the report live, like `tail -f`
   with a dashboard
 - **Streams large logs** instead of loading every request into memory first, so a
-  multi-gigabyte access log can be summarized without running out of RAM
+  multi-gigabyte access log can be summarized without running out of RAM —
+  see [BENCHMARKS.md](BENCHMARKS.md)
 - **Colored output** in a terminal (errors in red, status classes by color); automatically
   off when piped, when `NO_COLOR` is set, or with `--color never`
 - **Requests-over-time** bar chart, per minute / hour / day (`--bucket`, picked automatically by default)
@@ -152,7 +153,7 @@ appear in the log, not on how many requests there are. A log with a huge number 
 requests to a modest number of distinct pages summarizes in roughly constant
 memory; one with equally huge cardinality (millions of unique paths or IPs) will
 still use memory proportional to that, since the counts themselves have to be
-kept.
+kept. See [BENCHMARKS.md](BENCHMARKS.md) for measured throughput and memory numbers.
 
 ## Development
 
